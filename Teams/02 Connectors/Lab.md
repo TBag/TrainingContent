@@ -60,11 +60,11 @@ Congratulations! You have created an **Incoming Webhook** Connector and sent a s
 
 ## Exercise 2: Send a Hello World card message to the Incoming Webhook Connector ##
 
-**Prerequisites:**  In order to do this exercise you must first complete exercise 1 in the [Teams - 01 Tabs](../Teams/01 Tabs/Lab.md) training module.
+**Prerequisites:**  In order to do this exercise you must first complete exercise 1 in the [Teams - 01 Tabs](../01 Tabs) training module.
 
 ### Add a button to send a Hello World card message to the Incoming Webhook Connector ###
 
-The steps in this lab exercise are performed on the code created in exercise 1 in the [Teams - 01 Tabs](../Teams/01 Tabs/Lab.md) training module.
+The steps in this lab exercise are performed on the code created in exercise 1 in the [Teams - 01 Tabs](../01 Tabs) training module.
  
 1. Open the file **index.html**, add the following code after the line `<div id="splashBar"></div>`, then save the file.
 
