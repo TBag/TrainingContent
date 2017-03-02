@@ -15,7 +15,7 @@ Office 365 Connectors also provide a way for developers to integrate with Micros
 ## Exercise 1: Create a custom Incoming Webhook Connector for Microsoft Teams ##
 In this exercise, you will create an **Incoming Webhook** connector and send an HTTP request to the webhook address to create Connector Card messages.
 
-In the [02 Tabs](../02 Tabs) Team training module, you will create more complex Connector Card messages with code.
+In the [01 Tabs](../01 Tabs) Team training module, you will create more complex Connector Card messages with code.
 
 ### Add an Incoming Webhook Connector to a channel ###
 1. Open **Microsoft Teams** and sign in.
