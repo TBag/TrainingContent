@@ -1,471 +1,323 @@
-# Deep Dive into Office 365 with the Microsoft Graph API for OneDrive for Business
-In this lab, you will use Microsoft Graph to integrate Office 365 OneDrive for Business with an ASP.NET MVC5 application.
+# Connect to files in OneDrive with the Microsoft Graph
+In this lab, learn how to access, upload, and download files from OneDrive and OneDrive for Business using the Microsoft Graph, AAD v2 end point, and ASP.NET MVC 5.
+
+## Overview
+Through Microsoft Graph API, you can access files in OneDrive, OneDrive for Business, and Office Groups, by accessing the **drive** property of a user or group entity. You can navigate the hierarchy of a drive by path or by enumerating the contents of folders.
 
 ## Prerequisites
 1. You must have an Office 365 tenant and Microsoft Azure subscription to complete this lab. If you do not have one, the lab for **O3651-7 Setting up your Developer environment in Office 365** shows you how to obtain a trial.
-2. You must have Visual Studio 2015 with Update 1 installed.
+1. You must have Visual Studio 2017 with ASP.NET and web development workload installed.
 
-## Exercise 1: Create an ASP.NET MVC5 Application
-In this exercise, you will create the ASP.NET MVC5 application and register it with Azure active Directory.
+## Register the application
+In this step, you'll register an app on the Microsoft App Registration Portal. This generates the app ID and password that you'll use to configure the app in Visual Studio.
 
-1. Launch **Visual Studio 2015** as an administrator. 
-2. In Visual Studio select **File/New/Project**.
-3. In the **New Project** dialog, select **Templates/Visual C#/Web** and click **ASP.NET Web Application**. Name the new project **OneDriveWeb** and then click **OK**.  
-    
-    ![Screenshot of the previous step](Images/01.png)
-    > **Note:** Make sure you enter the exact same name for the Visual Studio Project that is specified in these lab instructions.  The Visual Studio Project name becomes part of the namespace in the code.  The code inside these instructions depends on the namespace matching the Visual Studio Project name specified in these instructions.  If you use a different project name the code will not compile unless you adjust all the namespaces to match the Visual Studio Project name you enter when you create the project.
-    
-4. In the **New ASP.NET Project** dialog, click **MVC** and then click **Change Authentication**.
-5. Select **Work And School Accounts**, check **Read directory data** and click **OK**.
+1. Sign into the [Microsoft App Registration Portal](https://apps.dev.microsoft.com "Microsoft App Registration Portal") using either your personal or work or school account.
+2. Choose **Add an app**.
+3. Enter a name for the app, and choose Create application.
+    > The registration page displays, listing the properties of your app.
 
+4. Copy the application ID. This is the unique identifier for your app.
+5. Under **Application Secrets**, choose **Generate New Password**. Copy the password from the **New password generated** dialog.
+    > You'll use the application ID and password to configure the app.
+
+6. Under **Platforms**, choose **Add platform > Web**.
+7. Make sure the **Allow Implicit Flow** check box is selected, and enter **https://localhost:44304/** as the Redirect URI.
+    > The Allow Implicit Flow option enables the OpenID Connect hybrid flow. During authentication, this enables the app to receive both sign-in info (the id_token) and artifacts (in this case, an authorization code) that the app uses to obtain an access token.
+ 
+8. Modify the **Microsoft Graph Permissions** value to include the required **Files.ReadWrite, User.Read** scope.
+	![Screenshot of the previous step](Images/03.png)
+
+9. Choose **Save**.
+
+
+## Exercise 1: Configure a starter project using Azure Active Directory v2 authentication
+1. Locate the [Starter Project](./Starter%20Project) folder that contains a starter project. The starter project is an ASP.NET MVC5 web application that you will update to call the Microsoft Graph.
+
+2. **Launch** Visual Studio 2017 and **open** the starter project.
+
+	![Screenshot of the previous step](Images/01.png)
+
+3. Open the **Web.config** file and find the **appSettings** element.
 	![Screenshot of the previous step](Images/02.png)
 
-6. Uncheck **Host in the cloud**, once the **New ASP.NET Project** dialog appears like the following screenshot, click **OK**. 
+2. Locate the app configuration keys in the appSettings element. Replace the **ENTER_YOUR_CLIENT_ID** and **ENTER_YOUR_SECRET** placeholder values with the values you just copied.
+3. Paste **Files.ReadWrite User.Read** into the value for **ida:GraphScopes**.
+	![Screenshot of the previous step](Images/04.png)
 
-	![Screenshot of the previous step](Images/03.png)
-    
-7. At this point you can test the authentication flow for your application.
-  1. In Visual Studio, press **F5**. The browser will automatically launch taking you to the HTTPS start page for the web application.
+4. Press F5 to compile and launch your new application in the default browser.
+   1. When the Graph and AAD v2 Auth Endpoint Starter page appears, click **Sign in** and log on to your Office 365 account.
+   2. Review the permissions the application is requesting, and click **Accept**.
+   3. Now that you are signed in to your application, exercise 1 is complete!
+   4. Make sure to stop debugging before continuing to exercise 2.
 
-   > **Note:** If you receive an error that indicates ASP.NET could not connect to the SQL database, please see the [SQL Server Database Connection Error Resolution document](../../SQL-DB-Connection-Error-Resolution.md) to quickly resolve the issue. 
+## Exercise 2: Access OneDrive for Business files through Microsoft Graph
 
-  1. To sign in, click the **Sign In** link in the upper-right corner.
-  2. Login using your **Organizational Account**.
-  3. Upon a successful login, since this will be the first time you have logged into this app, Azure AD will present you with the common consent dialog that looks similar to the following image:
+In this exercise, you will build on exercise 1 to connect to the Microsoft Graph and perform CRUD operations associated with the files in OneDrive for Business or OneDrive.
 
-    ![Screenshot of the previous step](Images/ConsentDialog.png)
-  4. Click **Accept** to approve the app's permission request on your data in Office 365.
-  5. You will then be redirected back to your web application. However notice in the upper right corner, it now shows your email address and the **Sign Out** link.
-  6. In Visual Studio, press **Shift+F5** to stop debugging.
+### Create the Files controller and use the Microsoft Graph
 
-Congratulations... at this point your app is configured with Azure AD and leverages OpenID Connect and OWIN to facilitate the authentication process!
+1. Create a new controller to process the requests for files and send them to Graph API.
+  1. Find the **Controllers** folder under **GraphFilesWeb**, right-click it and select **Add** > **New Scaffolded Item...**.
+  2. In the **Add Scaffold** dialog, select **MVC 5 Controller - Empty**, and choose **Add**.
+  3. Change the name of the controller to **FilesController** and click **Add**.
 
-## Grant App Necessary Permissions
-1. Browse to the [Azure Management Portal](https://manage.windowsazure.com) and sign in with your **Organizational Account**.
-2. In the left-hand navigation, click **Active Directory**.
-3. Select the directory you share with your Office 365 subscription.
-4. Search for the app with the **ida:ClientId** value that was created in the web.config file in exercise 1.
+2. **Add** the following reference to the top of the `FilesController` class.
 
-    ![Screenshot of the previous step](Images/04.png)
-5. Select the application. 
-6. Open the **Configure** tab.
-7. Scroll down to the **permissions to other applications** section. 
-8. Click the **Add Application** button.
-9. In the **Permissions to other applications** dialog, click the **PLUS** icon next to the **Microsoft Graph** option.
-10. Click the **Check mark** icon in the lower right corner.
-11. For the new **Microsoft Graph** application permission entry, select the **Delegated Permissions** dropdown on the same line and then select the following permissions:
-    * **Have full access to all files user can access**
-12. Click the **Save** button at the bottom of the page.
+    ```csharp
+	using System.Threading.Tasks;
+	using System.Collections.Generic;
+	using System.Web.Mvc;
+	using Microsoft.Graph;
+	using GraphFilesWeb.Helpers;
+	using GraphFilesWeb.Services;
+    ```
 
-## Exercise 2: Use Microsoft Graph for OneDrive for Business
-In this exercise, you will create a repository object for wrapping CRUD operations associated with files in OneDrive for Business.
+3. **Add** the following code into **FilesController** to create an instance of **GraphService**
+    ```csharp
+	GraphService graphService = new GraphService();
+    ```
 
-1. In the **Solution Explorer**, create a new folder named **Util**.
-2. Right-click the **Util** folder and select **Add/Class**, in the **Add New Item** dialog, name the new class **SettingsHelper** and click **Add** to create the new source file for the class. 
-3. At the top of the **SettingsHelper.cs** file, remove all the using statements and add the following using statements.
+4. **Replace** the existing `Index()` method in the `FilesController` class with this version which returns a view of items in the root of the user's OneDrive.
 
-	```c#
-    using System.Configuration;
-	```
-
-4. Implement the new class **SettingsHelper** using the following class definition.
-
-    ```c#
-    public class SettingsHelper
+    ```csharp
+    [Authorize]
+    public async Task<ActionResult> Index(int? pageSize, string nextLink)
     {
-
-        public static string ClientId
+        try
         {
-            get { return ConfigurationManager.AppSettings["ida:ClientId"]; }
+            GraphServiceClient graphClient = SDKHelper.GetAuthenticatedClient();
+            var results = await graphService.GetMyFiles(graphClient, pageSize, nextLink);
+            if (null != results.NextPageRequest)
+            {
+                ViewBag.NextLink = results.NextPageRequest.GetHttpRequestMessage().RequestUri;
+            }
+            else
+            {
+                ViewBag.NextLink = null;
+            }
+            return View(results);
         }
-
-        public static string ClientSecret
+        catch (ServiceException se)
         {
-            get { return ConfigurationManager.AppSettings["ida:ClientSecret"]; }
-        }
-        public static string AzureAdInstance
-        {
-            get { return ConfigurationManager.AppSettings["ida:AADInstance"]; }
-        }
-
-        public static string AzureAdTenantId
-        {
-            get { return ConfigurationManager.AppSettings["ida:TenantId"]; }
-        }
-
-        public static string GraphResourceUrl
-        {
-            get { return "https://graph.microsoft.com/v1.0/"; }
-        }
-
-        public static string AzureAdGraphResourceURL
-        {
-            get { return "https://graph.microsoft.com/"; }
-        }
-
-        public static string AzureAdAuthority
-        {
-            get { return AzureAdInstance + AzureAdTenantId; }
-        }
-
-        public static string ClaimTypeObjectIdentifier
-        {
-            get { return "http://schemas.microsoft.com/identity/claims/objectidentifier"; }
+            if (se.Error.Message == "Caller needs to authenticate.") return new EmptyResult();
+            return RedirectToAction("Index", "Error", new { message = se.Error.Message + Request.RawUrl + ": " + se.Error.Message });
         }
     }
     ```
-5. Assembly references are not added to the shared projects in ASP.NET MVC, rather they are added to the actual client projects. Therefore you need to add the following NuGet packages manually.
-	1. Open the Package Manager Console: **View/Other Windows/Package Manager Console**.
-	2. Enter each line below in the console, one at a time, pressing **ENTER** after each one. NuGet will install the package and all dependent packages:
-	
-		````powershell
-        PM> Install-Package Microsoft.Graph
-		````
-6. In the **Solution Explorer**, locate the **Models** folder in the **OneDriveWeb** project.
-7. Right-click the **Models** folder and select **Add/Class**.
-8. In the **Add New Item** dialog, name the new class **FileRepository.cs**.
-9. Click **Add**.
 
-  ![](Images/07.png)
-
-10. At the top of the **FileRepository.cs** file, remove all the using statements and add the following using statements.
-
-	````c#
-	using Microsoft.Graph;
-	using Microsoft.IdentityModel.Clients.ActiveDirectory;
-	using OneDriveWeb.Util;
-	using System.Collections.Generic;
-	using System.Linq;
-	using System.Net.Http.Headers;
-	using System.Security.Claims;
-	using System.Threading.Tasks;
-	````
-
-11. Add a function named `GetGraphAccessTokenAsync` to the `FileRepository` class to retrieve an Access Token.
-
-	````c#
-	private async Task<string> GetGraphAccessTokenAsync()
-	{
-		var signInUserId = ClaimsPrincipal.Current.FindFirst(ClaimTypes.NameIdentifier).Value;
-		var userObjectId = ClaimsPrincipal.Current.FindFirst(SettingsHelper.ClaimTypeObjectIdentifier).Value;
-
-		var clientCredential = new ClientCredential(SettingsHelper.ClientId, SettingsHelper.ClientSecret);
-		var userIdentifier = new UserIdentifier(userObjectId, UserIdentifierType.UniqueId);
-
-		AuthenticationContext authContext = new AuthenticationContext(SettingsHelper.AzureAdAuthority, new ADALTokenCache(signInUserId));
-		var result = await authContext.AcquireTokenSilentAsync(SettingsHelper.AzureAdGraphResourceURL, clientCredential, userIdentifier);
-		return result.AccessToken;
-	} 
-	````
-12. Add a function named `GetGraphServiceAsync` to the `FileRepository` class.
-
-	````c#
-	private async Task<GraphServiceClient> GetGraphServiceAsync()
+5. **Open** GraphService.cs file under the **Services** folder. **Add** the following code to `GraphService` to get files from the user's OneDrive.
+    ```csharp
+    public async Task<IDriveItemChildrenCollectionPage> GetMyFiles(GraphServiceClient graphClient, int? pageSize, string nextLink)
     {
-        var accessToken = await GetGraphAccessTokenAsync();
-        var graphserviceClient = new GraphServiceClient(SettingsHelper.GraphResourceUrl,
-                                    new DelegateAuthenticationProvider(
-                                        (requestMessage) =>
-                                        {
-                                            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("bearer", accessToken);
-                                            return Task.FromResult(0);
-                                        }));
-        return graphserviceClient;
+        pageSize = pageSize ?? 25;
+        var request = graphClient.Me.Drive.Root.Children.Request().Top(pageSize.Value);
+        if (nextLink != null){
+            request = new DriveItemChildrenCollectionRequest(nextLink, graphClient, null);
+        }
+        var results = await request.GetAsync();
+        return results;
     }
-	````
+    ```
+ 
+6. **Open** FilesController.cs file. **Add** the following code to the `FilesController` to delete a file from the user's OneDrive.
 
-13. Add the following method to get a list of all the items (folders and files) within the root of the user's OneDrive:
-
-	````c#
-    public async Task<List<DriveItem>> GetMyFiles(int pageIndex, int pageSize)
+    ```csharp
+    public async Task<ActionResult> Delete(string itemId, string etag)
     {
-        try
-        {
-            var graphServiceClient = await GetGraphServiceAsync();
-
-            var requestFiles = await graphServiceClient.Me.Drive.Root.Children.Request().GetAsync();
-
-            return requestFiles.CurrentPage.OrderBy(i => i.Name).Skip(pageIndex * pageSize).Take(pageSize).ToList();
-        }
-        catch
-        {
-            throw;
-        }
+        GraphServiceClient graphClient = SDKHelper.GetAuthenticatedClient();
+        await graphService.DeleteFile(graphClient, itemId, etag);
+        return Redirect("/Files");
     }
-	````
-  
-14. Add the following method to the `FileRepository` class to delete a single file from the user's OneDrive for Business drive:
+    ```
 
-	````c#
-    public async Task DeleteFile(string id)
+7. **Add** the following code to `GraphService` to delete a file from the user's OneDrive.
+    ```csharp
+    public async Task DeleteFile(GraphServiceClient graphClient, string itemId, string etag)
     {
-        try
-        {
-            var graphServiceClient = await GetGraphServiceAsync();
-
-            await graphServiceClient.Me.Drive.Items[id].Request().DeleteAsync();
-        }
-        catch
-        {
-            throw;
-        }
+        var request = graphClient.Me.Drive.Items[itemId].Request(new List<Option> { new HeaderOption("If-Match", etag) });
+        await request.DeleteAsync();
+        return;
     }
-	````
+    ```
 
-15. Add the following method to the `FileRepository` class to upload a single file to the user's OneDrive for Business:
-	
-	````c#
-    public async Task<DriveItem> UploadFile(System.IO.Stream filestream, string filename)
-    {
-        try
-        {
-            var graphServiceClient = await GetGraphServiceAsync();
+8. **Add** the following code to the `FilesController` to upload a new file to the user's OneDrive.
 
-            var newItem = await graphServiceClient.Me.Drive.Root.Children.Request()
-                .AddAsync(
-                new DriveItem
-                {
-                    Name = filename,
-                    File = new File()
-                });
-
-            return await graphServiceClient.Me.Drive.Items[newItem.Id].Content.Request().PutAsync<DriveItem>(filestream);
-        }
-        catch
-        {
-            throw;
-        }
-    }
-	````
-
-### Code the MVC Application
-Now you will code the MVC application to allow navigating the OneDrive for Business file collection using the Microsoft Graph.
-
-1. Locate the **Views/Shared** folder in the project.
-2. Open the **_Layout.cshtml** file found in the **Views/Shared** folder.
-    1. Locate the part of the file that includes a few links at the top of the page... it should look similar to the following code:
-    
-    ````asp
-    <div class="navbar-collapse collapse">
-        <ul class="nav navbar-nav">
-            <li>@Html.ActionLink("Home", "Index", "Home")</li>
-            <li>@Html.ActionLink("About", "About", "Home")</li>
-            <li>@Html.ActionLink("Contact", "Contact", "Home")</li>
-        </ul>
-        @Html.Partial("_LoginPartial")
-    </div>
-    ````
-
-    2. Update that navigation to have a new link (the **Files (Graph)** link added below) as well as a reference to the login control you just created:
-
-    ````asp
-    <div class="navbar-collapse collapse">
-        <ul class="nav navbar-nav">
-            <li>@Html.ActionLink("Home", "Index", "Home")</li>
-            <li>@Html.ActionLink("About", "About", "Home")</li>
-            <li>@Html.ActionLink("Contact", "Contact", "Home")</li>
-            <li>@Html.ActionLink("Files (Graph)", "Index", "Files")</li>
-        </ul>
-        @Html.Partial("_LoginPartial")
-    </div>
-    ````
-
-3. Right-click the **Controllers** folder and select **Add/Controller**.
-  1. In the **Add Scaffold** dialog, select **MVC 5 Controller - Empty** and click **Add**.
-  2. In the **Add Controller** dialog, give the controller the name **FilesController** and click **Add**.
-4. At the top of the file, remove all the using statements and add the following using statements.
-
-  ````c#
-  using OneDriveWeb.Models;
-  using System.Threading.Tasks;
-  using System.Web.Mvc;
-  ````
-
-5. **Replace** the **Index** method with the following code to read files.
-
-	````c#
-	[Authorize]
-	public async Task<ActionResult> Index(int? pageIndex)
-	{
-		FileRepository repository = new FileRepository();
-
-		const int pageSize = 10;
-
-		if (pageIndex == null)
-			pageIndex = 1;
-
-		var files = await repository.GetMyFiles((int)pageIndex - 1, pageSize);
-		ViewBag.pageIndex = pageIndex;
-		ViewBag.morePagesAvailable = files.Count < pageSize ? false : true;
-		return View(files);
-	}
-	````
-
-6. Within the `FilesController` class, right click the `View()` at the end of the `Index()` method and select **Add View**.
-7. Within the **Add View** dialog, set the following values:
-  1. View Name: **Index**.
-  2. Template: **Empty (without model)**.
-    
-    > Leave all other fields blank & unchecked.
-  
-  3. Click **Add**.
-8. **Replace** all of the code in the file with the following:
-
-  ````asp
-	@model IEnumerable<Microsoft.Graph.DriveItem>
-
-	@{ ViewBag.Title = "My Files"; }
-
-	<h2>My Files</h2>
-
-	<div class="row" style="margin-top:50px;">
-		<div class="col-sm-12">
-			<div class="table-responsive">
-				<table id="filesTable" class="table table-striped table-bordered">
-					<thead>
-						<tr>
-							<th></th>
-							<th>ID</th>
-							<th>Title</th>
-							<th>Created</th>
-							<th>Modified</th>
-						</tr>
-					</thead>
-					<tbody>
-						@foreach (var file in Model)
-						{
-							<tr>
-								<td>
-									@{
-										//Place delete control here
-									}
-								</td>
-								<td>
-									@file.Id
-								</td>
-								<td>
-									<a href="@file.WebUrl">@file.Name</a>
-								</td>
-								<td>
-									@file.CreatedDateTime.Value.UtcDateTime.ToLocalTime()
-								</td>
-								<td>
-									@file.LastModifiedDateTime.Value.UtcDateTime.ToLocalTime()
-								</td>
-							</tr>
-						 }
-					</tbody>
-				</table>
-			</div>
-			<div class="btn btn-group-sm">
-				@{
-					//Place Paging controls here
-				}
-			</div>
-		</div>
-	</div>
-  ````
-
-9. In **Visual Studio**, hit **F5** to begin debugging.
-
- > **Note:** If you receive an error that indicates ASP.NET could not connect to the SQL database, please see the [SQL Server Database Connection Error Resolution document](../../SQL-DB-Connection-Error-Resolution.md) to quickly resolve the issue. 
-
-10. When prompted, log in with your **Organizational Account**.
-11. Click the link **Files (Graph)** on the top of the home page.
-12. Verify that your application displays files from the OneDrive for Business library.
-
-  ![Screenshot of the previous step](Images/08.png)
-
-13. Stop debugging.
-14. In the **FilesController.cs** file, **add** the following code to upload and delete files.
-
-  ````c#
+    ```csharp
     [Authorize]
     public async Task<ActionResult> Upload()
     {
-
-        FileRepository repository = new FileRepository();
+        GraphServiceClient client = SDKHelper.GetAuthenticatedClient();
 
         foreach (string key in Request.Files)
         {
-            if (Request.Files[key] != null && Request.Files[key].ContentLength > 0)
+            var fileInRequest = Request.Files[key];
+            if (fileInRequest != null && fileInRequest.ContentLength > 0)
             {
-                var file = await repository.UploadFile(
-                    Request.Files[key].InputStream,
-                    Request.Files[key].FileName.Split('\\')[Request.Files[key].FileName.Split('\\').Length - 1]);
+                var filename = System.IO.Path.GetFileName(fileInRequest.FileName);
+                var request = client.Me.Drive.Root.Children[filename].Content.Request();
+                var uploadedFile = await request.PutAsync<DriveItem>(fileInRequest.InputStream);
             }
         }
 
         return Redirect("/Files");
     }
+    ```
 
-    [Authorize]
-    public async Task<ActionResult> Delete(string name)
+9. **Add** the following code to `GraphService` to upload a file from the user's OneDrive.
+    ```csharp
+    public async Task UploadFile(GraphServiceClient graphClient, string filename, Stream content)
     {
-        FileRepository repository = new FileRepository();
-
-        if (name != null)
-        {
-            await repository.DeleteFile(name);
-        }
-
-        return Redirect("/Files");
-
+        var request = graphClient.Me.Drive.Root.Children[filename].Content.Request();
+        var uploadedFile = await request.PutAsync<DriveItem>(content);
+        return;
     }
-  ````
+    ```
 
-15. In the **Index.cshtml** file under **Views/Files** folder, **add** the following code under the comment `Place delete control here`.
+### Create the files view
 
-  ````c#
-	Dictionary<string, object> attributes1 = new Dictionary<string, object>();
-    attributes1.Add("class", "btn btn-warning");
+In this section you'll wire up the Controller you created in the previous section to an MVC view that will display the contents of the OneDrive folder selected.
+1. Locate the **Views/Shared** folder in the project.
+2. Open the **_Layout.cshtml** file found in the **Views/Shared** folder.
+    1. Locate the part of the file that includes a few links at the top of the page. It should look similar to the following code:
+	    ```asp
+        <ul class="nav navbar-nav">
+            <li>@Html.ActionLink("Home", "Index", "Home")</li>
+            <li>@Html.ActionLink("About", "About", "Home")</li>
+            <li>@Html.ActionLink("Contact", "Contact", "Home")</li>
+        </ul>
+	    ```
 
-    RouteValueDictionary routeValues1 = new RouteValueDictionary();
-    routeValues1.Add("name", file.Id);
-    routeValues1.Add("etag", file.ETag);
-    @Html.ActionLink("X", "Delete", "Files", routeValues1, attributes1);
-  ````
+    2. Update that navigation to add the "OneDrive Files" link and connect this to the controller you just created.
+	    ```asp
+        <ul class="nav navbar-nav">
+            <li>@Html.ActionLink("Home", "Index", "Home")</li>
+            <li>@Html.ActionLink("About", "About", "Home")</li>
+            <li>@Html.ActionLink("Contact", "Contact", "Home")</li>
+            <li>@Html.ActionLink("OneDrive Files", "Index", "Files")</li>
+        </ul>
+	    ```
 
-16. **Add** the following code under the comment `Place Paging controls here`:
+3. Create a new **View** for OneDrive Files:
+   1. Find the **Views\Files** folder in the project.
+   2. Right-click the **Files** folder and select **Add > MVC 5 View Page (Razor)**, change the file name to **Index**, and click **Add**.
 
-  ````asp
-    var pageLinkAttributes = new Dictionary<string, object> { { "class", "btn btn-default" } };
+4. **Replace** all of the code in the **Files/Index.cshtml** with the following:
 
-    int pageIndex = ViewBag.pageIndex;
+    ```asp
+	@model IEnumerable<Microsoft.Graph.DriveItem>
 
-    // do prev link if not on first page
-    if (pageIndex > 1)
+	@{ ViewBag.Title = "My Files"; }
+	
+	<h2>My Files</h2>
+	
+	<div class="row" style="margin-top:50px;">
+	    <div class="col-sm-12">
+	        <div class="table-responsive">
+	            <table id="filesTable" class="table table-striped table-bordered">
+	                <thead>
+	                    <tr>
+	                        <th></th>
+	                        <th>ID</th>
+	                        <th>Name</th>
+	                        <th>Created</th>
+	                        <th>Modified</th>
+	                    </tr>
+	                </thead>
+	                <tbody>
+	                    @foreach (var file in Model)
+	                    {
+	                        <tr>
+	                            <td>
+	                                @{
+	                                    //Place delete control here
+	                                }
+	                            </td>
+	                            <td>
+	                                @file.Id
+	                            </td>
+	                            <td>
+	                                <a href="@file.WebUrl">@file.Name</a>
+	                            </td>
+	                            <td>
+	                                @file.CreatedDateTime
+	                            </td>
+	                            <td>
+	                                @file.LastModifiedDateTime
+	                            </td>
+	                        </tr>
+	                                    }
+	                </tbody>
+	            </table>
+	        </div>
+	        <div class="btn btn-group-sm">
+	            @{
+	                //Place Paging controls here
+	            }
+	        </div>
+	        @{
+	            // Place upload controls here
+	        }
+	    </div>
+	</div>
+    ```
+
+5. In **Visual Studio**, hit **F5** to begin debugging.
+6. When prompted, log in with your Office 365 Account.
+7. Click the link **OneDrive Files** on the top of the home page.
+8. Verify that your application displays files from the user's OneDrive.
+	![Screenshot of the previous step](Images/05.png)
+
+9. Stop debugging. You've connected your app to OneDrive files through Graph API!
+
+### Paging through the results
+1. **Add** the following code under the comment `//Place Paging controls here` in **Index.cshtml**.
+    ```csharp
+    Dictionary<string, object> attributes2 = new Dictionary<string, object>();
+    attributes2.Add("class", "btn btn-default");
+
+    if (null != ViewBag.NextLink)
     {
-        var routeValues = new RouteValueDictionary { { "pageIndex", pageIndex - 1 } };
-        @Html.ActionLink("Previous Page", "Index", "Files", routeValues, pageLinkAttributes);
+      RouteValueDictionary routeValues3 = new RouteValueDictionary();
+      routeValues3.Add("nextLink", ViewBag.NextLink);
+      @Html.ActionLink("Next Page", "Index", "Files", routeValues3, attributes2);
     }
+    ```
+2. Press **F5** to start debugging.
+3. Click the **Next** button to page through results. Use the browser's back button to return to previous pages.
+	![Screenshot of the previous step](Images/06.png)
 
-    // do next link if current page = max page size
-    if (ViewBag.morePagesAvailable)
-    {
-        var routeValues = new RouteValueDictionary { { "pageIndex", pageIndex + 1 } };
-            @Html.ActionLink("Next Page", "Index", "Files", routeValues, pageLinkAttributes);
-    }
-  ````
+### Uploading a file
 
-17. **Add** the following code to the bottom of the **Index.cshtml** file to create an upload control.
+1. **Add** the following code under the comment `// Place upload controls here` in **Index.cshtml** to create an upload control.
+    ```asp
+     <div class="row" style="margin-top:50px;">
+         <div class="col-sm-12">
+             @using (Html.BeginForm("Upload", "Files", FormMethod.Post, new { enctype = "multipart/form-data" }))
+             {
+                 <input type="file" id="file" name="file" class="btn btn-default" />
+                 <input type="submit" id="submit" name="submit" value="Upload" class="btn btn-default" />
+             }
+         </div>
+     </div>
+    ```
 
-  ````asp
-    <div class="row" style="margin-top:50px;">
-        <div class="col-sm-12">
-            @using (Html.BeginForm("Upload", "Files", FormMethod.Post, new { enctype = "multipart/form-data" }))
-            {
-                <input type="file" id="file" name="file" class="btn btn-default" />
-                <input type="submit" id="submit" name="submit" value="Upload" class="btn btn-default" />
-            }
-        </div>
-    </div>
-  ````
+2. Press **F5** to begin debugging.
+3. Test uploading a new file and ensure it appears in the folder list.
+	![Screenshot of the previous step](Images/07.png)
 
-18. Press **F5** to begin debugging.
+### Delete an item
 
- > **Note:** If you receive an error that indicates ASP.NET could not connect to the SQL database, please see the [SQL Server Database Connection Error Resolution document](../../SQL-DB-Connection-Error-Resolution.md) to quickly resolve the issue. 
+1. In the **Index.cshtml** file under **Views/Files** folder, **add** the following code under the comment `//Place delete control here` to delete a file.
+  	```asp
+	  Dictionary<string, object> attributes1 = new Dictionary<string, object>();
+	  attributes1.Add("class", "btn btn-warning");
+	  RouteValueDictionary routeValues1 = new RouteValueDictionary();
+	  routeValues1.Add("itemId", file.Id);
+	  routeValues1.Add("etag", file.ETag);
+	  @Html.ActionLink("X", "Delete", "Files", routeValues1, attributes1);
+  	```
 
-19. Test the paging, upload, and delete functionality in the application.
+2. Press **F5** to begin debugging.
+3. Test the delete functionality in the application by deleting a file.
 
-Congratulations! In this exercise you have created an MVC application that uses Microsoft Graph to to return and manage files in a OneDrive for Business file collection.
+**Congratulations!** In this exercise you have created an MVC application that uses Microsoft Graph to view and manage files in OneDrive!
